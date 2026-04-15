@@ -1,6 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -O2
-LDFLAGS = -lcrypto
+CFLAGS = -Wall -Wextra -O2 -I/opt/homebrew/opt/openssl/include -I/usr/local/opt/openssl/include
+LDFLAGS = -L/opt/homebrew/opt/openssl/lib -L/usr/local/opt/openssl/lib -lcrypto
 
 # ─── Main binary ─────────────────────────────────────────────────────────────
 
