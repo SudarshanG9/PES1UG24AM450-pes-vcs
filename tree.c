@@ -137,7 +137,17 @@ int tree_from_index(ObjectID *id_out) {
 
     for (int i = 0; i < idx.count; i++) {
         char *path = idx.entries[i].path;
+        char *slash = strchr(path, '/');
 
+    if (slash) {
+        size_t dir_len = slash - path;
+
+        char dirname[256];
+        strncpy(dirname, path, dir_len);
+        dirname[dir_len] = '\0';
+
+    // You’ll later group entries with same dirname
+    }
         if (!strchr(path, '/')) {
             ObjectID blob_id;
 
