@@ -177,11 +177,38 @@ int index_load(Index *index) {
 //   - rename                           : atomically moving the temp file over the old index
 //
 // Returns 0 on success, -1 on error.
+static int compare_index_entries(const void *a, const void *b) {
+    return strcmp(((const IndexEntry *)a)->path, ((const IndexEntry *)b)->path);
+}
 int index_save(const Index *index) {
-    // TODO: Implement atomic index saving
-    // (See Lab Appendix for logical steps)
-    (void)index;
-    return -1;
+    Index copy = *index;
+    qsort(copy.entries, copy.count, sizeof(IndexEntry), compare_index_entries);
+    char temp_path[] = ".pes/index_tmpXXXXXX";
+    int fd = mkstemp(temp_path);
+    if (fd < 0) return -1;
+    FILE *f = fdopen(fd, "w");
+    if (!f) {
+        close(fd);
+        unlink(temp_path);
+        return -1;
+    }
+    for (int i = 0; i < copy.count; i++) {
+        char hex[HASH_HEX_SIZE + 1];
+        hash_to_hex(&copy.entries[i].hash, hex);
+        fprintf(f, "%06o %s %llu %u %s\n",
+                copy.entries[i].mode, hex,
+                (unsigned long long)copy.entries[i].mtime_sec,
+                copy.entries[i].size,
+                copy.entries[i].path);
+    }
+    fflush(f);
+    fsync(fileno(f));
+    fclose(f); 
+    if (rename(temp_path, INDEX_FILE) < 0) {
+        unlink(temp_path);
+        return -1;
+    }
+    return 0;
 }
 
 // Stage a file for the next commit.
