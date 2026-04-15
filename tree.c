@@ -133,46 +133,8 @@ int tree_from_index(ObjectID *id_out) {
     Index idx;
     if (index_load(&idx) < 0) return -1;
 
-    Tree tree = {0};
-
-    for (int i = 0; i < idx.count; i++) {
-        char *path = idx.entries[i].path;
-        char *slash = strchr(path, '/');
-
-    if (slash) {
-        size_t dir_len = slash - path;
-
-        char dirname[256];
-        strncpy(dirname, path, dir_len);
-        dirname[dir_len] = '\0';
-
-    // You’ll later group entries with same dirname
-    }
-        if (!strchr(path, '/')) {
-            ObjectID blob_id;
-
-            if (object_write(OBJ_BLOB,
-                             idx.entries[i].data,
-                             idx.entries[i].size,
-                             &blob_id) < 0)
-                return -1;
-
-            TreeEntry *e = &tree.entries[tree.count++];
-            e->mode = MODE_FILE;
-            strcpy(e->name, path);
-            e->hash = blob_id;
-        }
-    }
-
-    void *data;
-    size_t len;
-    if (tree_serialize(&tree, &data, &len) < 0) return -1;
-
-    int res = object_write(OBJ_TREE, data, len, id_out);
-    free(data);
-    return res;
+    return write_tree_level(idx.entries, idx.count, id_out);
 }
-
 
 
 static int write_tree_level(IndexEntry *entries, int count, ObjectID *id_out) {
