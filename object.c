@@ -116,11 +116,55 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     ObjectID id;
     compute_hash(buffer, total_len, &id);
 
-
     if (object_exists(&id)) {
         *id_out = id;
         free(buffer);
         return 0;
+    }
+
+    char path[512];
+    object_path(&id, path, sizeof(path));
+
+    char dir[512];
+    strncpy(dir, path, sizeof(dir));
+    char *slash = strrchr(dir, '/');
+    if (!slash) {
+        free(buffer);
+        return -1;
+    }
+    *slash = '\0';
+
+    mkdir(dir, 0755);  // ignore if exists
+
+    char temp_path[512];
+    snprintf(temp_path, sizeof(temp_path), "%s/tempXXXXXX", dir);
+
+    int fd = mkstemp(temp_path);
+    if (fd < 0) {
+        free(buffer);
+        return -1;
+    }
+
+    if (write(fd, buffer, total_len) != (ssize_t)total_len) {
+        close(fd);
+        unlink(temp_path);
+        free(buffer);
+        return -1;
+    }
+
+    fsync(fd);
+    close(fd);
+
+    if (rename(temp_path, path) < 0) {
+        unlink(temp_path);
+        free(buffer);
+        return -1;
+    }
+
+    int dir_fd = open(dir, O_DIRECTORY);
+    if (dir_fd >= 0) {
+        fsync(dir_fd);
+        close(dir_fd);
     }
 
     *id_out = id;
