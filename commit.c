@@ -232,7 +232,9 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
     if (commit_id_out) {
         *commit_id_out = new_commit_id;
     }
-    // TEMPORARY placeholder
-    return -1;
+    if (head_update(&new_commit_id) != 0) {
+        fprintf(stderr, "error: failed to update HEAD\n");
+        return -1;
+    }
+    return 0; // Success!
 }
-
