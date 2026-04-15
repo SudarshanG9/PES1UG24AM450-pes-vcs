@@ -215,6 +215,24 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
     strncpy(commit.author, pes_author(), sizeof(commit.author) - 1);
     commit.timestamp = (uint64_t)time(NULL);
     snprintf(commit.message, sizeof(commit.message), "%s", message);
+    void *data = NULL;
+    size_t len = 0;
+    if (commit_serialize(&commit, &data, &len) != 0) {
+        fprintf(stderr, "error: failed to serialize commit\n");
+        return -1;
+    }
+    ObjectID new_commit_id;
+    if (object_write(OBJ_COMMIT, data, len, &new_commit_id) != 0) {
+        fprintf(stderr, "error: failed to write commit object\n");
+        free(data);
+        return -1;
+    }
+    free(data);
+    
+    if (commit_id_out) {
+        *commit_id_out = new_commit_id;
+    }
     // TEMPORARY placeholder
     return -1;
 }
+
