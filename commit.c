@@ -200,6 +200,18 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
         return -1;
     }
     
-    // TEMPORARY placeholder to keep the compiler happy for now
+    Commit commit;
+    memset(&commit, 0, sizeof(Commit)); // Ensure clean memory
+    commit.tree = tree_id;
+    
+    // head_read returns 0 if a parent is found. If HEAD is completely empty, 
+    // it safely fails and we mark has_parent as 0.
+    if (head_read(&commit.parent) == 0) {
+        commit.has_parent = 1;
+    } else {
+        commit.has_parent = 0;
+    }
+
+    // TEMPORARY placeholder
     return -1;
 }
