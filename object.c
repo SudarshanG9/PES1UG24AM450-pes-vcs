@@ -197,37 +197,60 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_t *len_out) {
     // TODO: Implement
 
-    char header[64];
-    const char *type_str;
+    char path[512];
+    object_path(id, path, sizeof(path));
 
-    switch (type) {
-        case OBJ_BLOB: type_str = "blob"; break;
-        case OBJ_TREE: type_str = "tree"; break;
-        case OBJ_COMMIT: type_str = "commit"; break;
-        default: return -1;
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    rewind(f);
+
+    unsigned char *buffer = malloc(file_size);
+    if (!buffer) {
+        fclose(f);
+        return -1;
     }
 
-    int header_len = snprintf(header, sizeof(header), "%s %zu", type_str, len) + 1;
-
-    size_t total_len = header_len + len;
-    unsigned char *buffer = malloc(total_len);
-    if (!buffer) return -1;
-
-    memcpy(buffer, header, header_len);
-    memcpy(buffer + header_len, data, len);
-
-    ObjectID id;
-    compute_hash(buffer, total_len, &id);
-
-
-    if (object_exists(&id)) {
-        *id_out = id;
+    if (fread(buffer, 1, file_size, f) != (size_t)file_size) {
+        fclose(f);
         free(buffer);
-        return 0;
+        return -1;
     }
 
-    *id_out = id;
+    fclose(f);
+
+    char *null_pos = memchr(buffer, '\0', file_size);
+    if (!null_pos) {
+        free(buffer);
+        return -1;
+    }
+
+    size_t header_len = null_pos - (char *)buffer;
+
+    char type_str[10];
+    size_t size;
+
+    sscanf((char *)buffer, "%s %zu", type_str, &size);
+
+    if (strcmp(type_str, "blob") == 0) *type_out = OBJ_BLOB;
+    else if (strcmp(type_str, "tree") == 0) *type_out = OBJ_TREE;
+    else if (strcmp(type_str, "commit") == 0) *type_out = OBJ_COMMIT;
+    else {
+        free(buffer);
+        return -1;
+    }
+
+    *data_out = malloc(size);
+    if (!*data_out) {
+        free(buffer);
+        return -1;
+    }
+
+    memcpy(*data_out, null_pos + 1, size);
+    *len_out = size;
+
     free(buffer);
     return 0;
-
 }
