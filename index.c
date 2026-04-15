@@ -112,8 +112,7 @@ int index_status(const Index *index) {
             
             if (!is_tracked) {
                 struct stat st;
-                stat(ent->d_name, &st);
-                if (S_ISREG(st.st_mode)) { // Only list regular files for simplicity
+                if (stat(ent->d_name, &st) == 0 && S_ISREG(st.st_mode)) { // Only list regular files for simplicity
                     printf("  untracked:  %s\n", ent->d_name);
                     untracked_count++;
                 }
