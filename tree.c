@@ -130,30 +130,25 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 //
 // Returns 0 on success, -1 on error.
 int tree_from_index(ObjectID *id_out) {
-     Index idx;
-    if (index_load(&idx) < 0) return -1;
-
     Tree tree = {0};
 
-    for (int i = 0; i < idx.count; i++) {
-        char *path = idx.entries[i].path;
+    // Track processed entries
+    int used[count];
+    memset(used, 0, sizeof(used));
+
+    for (int i = 0; i < count; i++) {
+        if (used[i]) continue;
+
+        char *path = entries[i].path;
         char *slash = strchr(path, '/');
 
-    if (slash) {
-        size_t dir_len = slash - path;
-
-        char dirname[256];
-        strncpy(dirname, path, dir_len);
-        dirname[dir_len] = '\0';
-
-    // You’ll later group entries with same dirname
-    }
-        if (!strchr(path, '/')) {
+        // CASE 1: file
+        if (!slash) {
             ObjectID blob_id;
 
             if (object_write(OBJ_BLOB,
-                             idx.entries[i].data,
-                             idx.entries[i].size,
+                             entries[i].data,
+                             entries[i].size,
                              &blob_id) < 0)
                 return -1;
 
@@ -161,14 +156,58 @@ int tree_from_index(ObjectID *id_out) {
             e->mode = MODE_FILE;
             strcpy(e->name, path);
             e->hash = blob_id;
+
+            used[i] = 1;
+        }
+
+        // CASE 2: directory
+        else {
+            size_t dir_len = slash - path;
+
+            char dirname[256];
+            strncpy(dirname, path, dir_len);
+            dirname[dir_len] = '\0';
+
+            // collect subentries
+            IndexEntry subentries[count];
+            int subcount = 0;
+
+            for (int j = 0; j < count; j++) {
+                if (used[j]) continue;
+
+                if (strncmp(entries[j].path, dirname, dir_len) == 0 &&
+                    entries[j].path[dir_len] == '/') {
+
+                    subentries[subcount] = entries[j];
+
+                    // strip prefix "dir/"
+                    subentries[subcount].path =
+                        entries[j].path + dir_len + 1;
+
+                    subcount++;
+                    used[j] = 1;
+                }
+            }
+
+            ObjectID subtree_id;
+            if (write_tree_level(subentries, subcount, &subtree_id) < 0)
+                return -1;
+
+            TreeEntry *e = &tree.entries[tree.count++];
+            e->mode = MODE_DIR;
+            strcpy(e->name, dirname);
+            e->hash = subtree_id;
         }
     }
 
     void *data;
     size_t len;
-    if (tree_serialize(&tree, &data, &len) < 0) return -1;
+
+    if (tree_serialize(&tree, &data, &len) < 0)
+        return -1;
 
     int res = object_write(OBJ_TREE, data, len, id_out);
     free(data);
     return res;
+
 }
