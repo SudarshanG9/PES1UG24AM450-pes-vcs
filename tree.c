@@ -15,6 +15,11 @@
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include "index.h"
+
+// Forward declarations
+int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
+static int write_tree_level(IndexEntry *entries, int count, ObjectID *id_out);
 
 // ─── Mode Constants ─────────────────────────────────────────────────────────
 
@@ -152,18 +157,10 @@ static int write_tree_level(IndexEntry *entries, int count, ObjectID *id_out) {
 
         // CASE 1: file
         if (!slash) {
-            ObjectID blob_id;
-
-            if (object_write(OBJ_BLOB,
-                             entries[i].data,
-                             entries[i].size,
-                             &blob_id) < 0)
-                return -1;
-
             TreeEntry *e = &tree.entries[tree.count++];
-            e->mode = MODE_FILE;
+            e->mode = entries[i].mode;
             strcpy(e->name, path);
-            e->hash = blob_id;
+            e->hash = entries[i].hash;
 
             used[i] = 1;
         }
@@ -189,8 +186,7 @@ static int write_tree_level(IndexEntry *entries, int count, ObjectID *id_out) {
                     subentries[subcount] = entries[j];
 
                     // strip prefix "dir/"
-                    subentries[subcount].path =
-                        entries[j].path + dir_len + 1;
+                    strcpy(subentries[subcount].path, entries[j].path + dir_len + 1);
 
                     subcount++;
                     used[j] = 1;

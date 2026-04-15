@@ -182,30 +182,37 @@ static int compare_index_entries(const void *a, const void *b) {
     return strcmp(((const IndexEntry *)a)->path, ((const IndexEntry *)b)->path);
 }
 int index_save(const Index *index) {
-    Index copy = *index;
-    qsort(copy.entries, copy.count, sizeof(IndexEntry), compare_index_entries);
+    Index *copy = malloc(sizeof(Index));
+    if (!copy) return -1;
+    *copy = *index;
+    qsort(copy->entries, copy->count, sizeof(IndexEntry), compare_index_entries);
     char temp_path[] = ".pes/index_tmpXXXXXX";
-    int fd = mkstemp(temp_path);
-    if (fd < 0) return -1;
+    int fd = mkstemp(temp_path); if (fd < 0) perror("mkstemp");
+    if (fd < 0) {
+        free(copy);
+        return -1;
+    }
     FILE *f = fdopen(fd, "w");
     if (!f) {
         close(fd);
         unlink(temp_path);
+        free(copy);
         return -1;
     }
-    for (int i = 0; i < copy.count; i++) {
+    for (int i = 0; i < copy->count; i++) {
         char hex[HASH_HEX_SIZE + 1];
-        hash_to_hex(&copy.entries[i].hash, hex);
+        hash_to_hex(&copy->entries[i].hash, hex);
         fprintf(f, "%06o %s %llu %u %s\n",
-                copy.entries[i].mode, hex,
-                (unsigned long long)copy.entries[i].mtime_sec,
-                copy.entries[i].size,
-                copy.entries[i].path);
+                copy->entries[i].mode, hex,
+                (unsigned long long)copy->entries[i].mtime_sec,
+                copy->entries[i].size,
+                copy->entries[i].path);
     }
     fflush(f);
     fsync(fileno(f));
     fclose(f); 
-    if (rename(temp_path, INDEX_FILE) < 0) {
+    free(copy);
+    if (rename(temp_path, INDEX_FILE) < 0) { perror("rename");
         unlink(temp_path);
         return -1;
     }
@@ -223,7 +230,7 @@ int index_save(const Index *index) {
 // Returns 0 on success, -1 on error.
 int index_add(Index *index, const char *path) {
     struct stat st;
-    if (lstat(path, &st) != 0) {
+    if (lstat(path, &st) != 0) { perror("lstat");
         fprintf(stderr, "error: %s does not exist\n", path);
         return -1;
     }
@@ -232,7 +239,7 @@ int index_add(Index *index, const char *path) {
         return -1;
     }
     FILE *f = fopen(path, "rb");
-    if (!f) return -1;
+    if (!f) { perror("fopen"); return -1; }
     void *data = NULL;
     if (st.st_size > 0) {
         data = malloc(st.st_size);
@@ -248,7 +255,7 @@ int index_add(Index *index, const char *path) {
     }
     fclose(f);
     ObjectID id;
-    if (object_write(OBJ_BLOB, data, st.st_size, &id) < 0) {
+    if (object_write(OBJ_BLOB, data, st.st_size, &id) < 0) { fprintf(stderr, "object_write failed\n");
         if (data) free(data);
         return -1;
     }

@@ -27,10 +27,10 @@ void hash_to_hex(const ObjectID *id, char *hex_out) {
 }
 
 int hex_to_hash(const char *hex, ObjectID *id_out) {
-    if (strlen(hex) < HASH_HEX_SIZE) return -1;
+    if (strlen(hex) < HASH_HEX_SIZE)  { printf("failed at %d\n", __LINE__); return -1; }
     for (int i = 0; i < HASH_SIZE; i++) {
         unsigned int byte;
-        if (sscanf(hex + i * 2, "%2x", &byte) != 1) return -1;
+        if (sscanf(hex + i * 2, "%2x", &byte) != 1)  { printf("failed at %d\n", __LINE__); return -1; }
         id_out->hash[i] = (uint8_t)byte;
     }
     return 0;
@@ -101,14 +101,14 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
         case OBJ_BLOB: type_str = "blob"; break;
         case OBJ_TREE: type_str = "tree"; break;
         case OBJ_COMMIT: type_str = "commit"; break;
-        default: return -1;
+        default:  { printf("failed at %d\n", __LINE__); return -1; }
     }
 
     int header_len = snprintf(header, sizeof(header), "%s %zu", type_str, len) + 1;
 
     size_t total_len = header_len + len;
     unsigned char *buffer = malloc(total_len);
-    if (!buffer) return -1;
+    if (!buffer)  { printf("failed at %d\n", __LINE__); return -1; }
 
     memcpy(buffer, header, header_len);
     memcpy(buffer + header_len, data, len);
@@ -130,7 +130,7 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     char *slash = strrchr(dir, '/');
     if (!slash) {
         free(buffer);
-        return -1;
+         { printf("failed at %d\n", __LINE__); return -1; }
     }
     *slash = '\0';
 
@@ -142,14 +142,14 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     int fd = mkstemp(temp_path);
     if (fd < 0) {
         free(buffer);
-        return -1;
+         { printf("failed at %d\n", __LINE__); return -1; }
     }
 
     if (write(fd, buffer, total_len) != (ssize_t)total_len) {
         close(fd);
         unlink(temp_path);
         free(buffer);
-        return -1;
+         { printf("failed at %d\n", __LINE__); return -1; }
     }
 
     fsync(fd);
@@ -158,7 +158,7 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     if (rename(temp_path, path) < 0) {
         unlink(temp_path);
         free(buffer);
-        return -1;
+         { printf("failed at %d\n", __LINE__); return -1; }
     }
 
     int dir_fd = open(dir, O_DIRECTORY);
@@ -199,7 +199,7 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
     object_path(id, path, sizeof(path));
 
     FILE *f = fopen(path, "rb");
-    if (!f) return -1;
+    if (!f)  { printf("failed at %d\n", __LINE__); return -1; }
 
     fseek(f, 0, SEEK_END);
     long file_size = ftell(f);
@@ -208,13 +208,13 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
     unsigned char *buffer = malloc(file_size);
     if (!buffer) {
         fclose(f);
-        return -1;
+         { printf("failed at %d\n", __LINE__); return -1; }
     }
 
     if (fread(buffer, 1, file_size, f) != (size_t)file_size) {
         fclose(f);
         free(buffer);
-        return -1;
+         { printf("failed at %d\n", __LINE__); return -1; }
     }
 
     fclose(f);
@@ -224,13 +224,13 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
     compute_hash(buffer, file_size, &computed);
     if (memcmp(computed.hash, id->hash, HASH_SIZE) != 0) {
         free(buffer);
-        return -1;
+         { printf("failed at %d\n", __LINE__); return -1; }
     }
 
     char *null_pos = memchr(buffer, '\0', file_size);
     if (!null_pos) {
         free(buffer);
-        return -1;
+         { printf("failed at %d\n", __LINE__); return -1; }
     }
 
     char type_str[10];
@@ -243,13 +243,13 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
     else if (strcmp(type_str, "commit") == 0) *type_out = OBJ_COMMIT;
     else {
         free(buffer);
-        return -1;
+         { printf("failed at %d\n", __LINE__); return -1; }
     }
 
     *data_out = malloc(size);
     if (!*data_out) {
         free(buffer);
-        return -1;
+         { printf("failed at %d\n", __LINE__); return -1; }
     }
 
     memcpy(*data_out, null_pos + 1, size);
