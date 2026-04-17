@@ -135,19 +135,34 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 //
 // Returns 0 on success, -1 on error.
 int tree_from_index(ObjectID *id_out) {
-    Index idx;
-    if (index_load(&idx) < 0) return -1;
+    // Heap-allocate Index: the struct is ~5.4 MB which overflows the stack
+    // under -O2 when combined with other large frames on the call stack.
+    Index *idx = malloc(sizeof(Index));
+    if (!idx) return -1;
 
-    return write_tree_level(idx.entries, idx.count, id_out);
+    if (index_load(idx) < 0) { free(idx); return -1; }
+
+    int result = write_tree_level(idx->entries, idx->count, id_out);
+    free(idx);
+    return result;
 }
 
 
 static int write_tree_level(IndexEntry *entries, int count, ObjectID *id_out) {
     Tree tree = {0};
 
-    // Track processed entries
-    int used[count];
-    memset(used, 0, sizeof(used));
+    if (count == 0) {
+        // Write empty tree
+        void *data; size_t len;
+        if (tree_serialize(&tree, &data, &len) < 0) return -1;
+        int res = object_write(OBJ_TREE, data, len, id_out);
+        free(data);
+        return res;
+    }
+
+    // Track processed entries — heap-allocate to avoid large VLA on stack
+    int *used = calloc(count, sizeof(int));
+    if (!used) return -1;
 
     for (int i = 0; i < count; i++) {
         if (used[i]) continue;
@@ -173,8 +188,9 @@ static int write_tree_level(IndexEntry *entries, int count, ObjectID *id_out) {
             strncpy(dirname, path, dir_len);
             dirname[dir_len] = '\0';
 
-            // collect subentries
-            IndexEntry subentries[count];
+            // Heap-allocate subentries array — avoids large VLA on stack
+            IndexEntry *subentries = malloc(count * sizeof(IndexEntry));
+            if (!subentries) { free(used); return -1; }
             int subcount = 0;
 
             for (int j = 0; j < count; j++) {
@@ -194,8 +210,9 @@ static int write_tree_level(IndexEntry *entries, int count, ObjectID *id_out) {
             }
 
             ObjectID subtree_id;
-            if (write_tree_level(subentries, subcount, &subtree_id) < 0)
-                return -1;
+            int sub_rc = write_tree_level(subentries, subcount, &subtree_id);
+            free(subentries);
+            if (sub_rc < 0) { free(used); return -1; }
 
             TreeEntry *e = &tree.entries[tree.count++];
             e->mode = MODE_DIR;
@@ -203,6 +220,8 @@ static int write_tree_level(IndexEntry *entries, int count, ObjectID *id_out) {
             e->hash = subtree_id;
         }
     }
+
+    free(used);
 
     void *data;
     size_t len;

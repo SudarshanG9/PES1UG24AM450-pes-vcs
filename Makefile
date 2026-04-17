@@ -1,6 +1,15 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -O2 -I/opt/homebrew/opt/openssl/include -I/usr/local/opt/openssl/include
-LDFLAGS = -L/opt/homebrew/opt/openssl/lib -L/usr/local/opt/openssl/lib -lcrypto
+
+# Index struct is ~5.4 MB; ensure enough stack on macOS (default 8 MB overflows under -O2)
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+    STACK_FLAG := -Wl,-stack_size,0x1000000
+else
+    STACK_FLAG :=
+endif
+
+LDFLAGS = -L/opt/homebrew/opt/openssl/lib -L/usr/local/opt/openssl/lib -lcrypto $(STACK_FLAG)
 
 # ─── Main binary ─────────────────────────────────────────────────────────────
 
@@ -18,7 +27,7 @@ pes: $(OBJS)
 test_objects: test_objects.o object.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
-test_tree: test_tree.o object.o tree.o
+test_tree: test_tree.o object.o tree.o index.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 # ─── Convenience targets ────────────────────────────────────────────────────

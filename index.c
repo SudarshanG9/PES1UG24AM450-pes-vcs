@@ -186,12 +186,14 @@ int index_save(const Index *index) {
     if (!copy) return -1;
     *copy = *index;
     qsort(copy->entries, copy->count, sizeof(IndexEntry), compare_index_entries);
+
     char temp_path[] = ".pes/index_tmpXXXXXX";
-    int fd = mkstemp(temp_path); if (fd < 0) perror("mkstemp");
+    int fd = mkstemp(temp_path);
     if (fd < 0) {
         free(copy);
         return -1;
     }
+
     FILE *f = fdopen(fd, "w");
     if (!f) {
         close(fd);
@@ -199,6 +201,7 @@ int index_save(const Index *index) {
         free(copy);
         return -1;
     }
+
     for (int i = 0; i < copy->count; i++) {
         char hex[HASH_HEX_SIZE + 1];
         hash_to_hex(&copy->entries[i].hash, hex);
@@ -208,14 +211,17 @@ int index_save(const Index *index) {
                 copy->entries[i].size,
                 copy->entries[i].path);
     }
+
     fflush(f);
     fsync(fileno(f));
     fclose(f); 
     free(copy);
-    if (rename(temp_path, INDEX_FILE) < 0) { perror("rename");
+
+    if (rename(temp_path, INDEX_FILE) < 0) {
         unlink(temp_path);
         return -1;
     }
+
     return 0;
 }
 
